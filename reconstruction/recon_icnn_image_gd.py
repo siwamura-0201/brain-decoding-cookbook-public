@@ -261,11 +261,12 @@ def recon_icnn_image_gd(
                         ft = a_feat[np.newaxis]
 
                     feat.update({layer: ft})
-
-            # Replace nan values with training mean
-            for layer, ft in feat.items():
-                nan_mask = np.isnan(feat[layer])
-                feat[layer][nan_mask] = feat_mean0_train[layer][nan_mask]
+                    
+            if decoded:
+                # Replace nan values with training mean
+                for layer, ft in feat.items():
+                    nan_mask = np.isnan(feat[layer])
+                    feat[layer][nan_mask] = feat_mean0_train[layer][nan_mask]
 
             # Norm of the DNN features for each layer
             feat_norm = np.array(
