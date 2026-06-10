@@ -11,7 +11,6 @@ import os
 
 from bdpy.dataform import Features, DecodedFeatures
 from bdpy.dl.torch.models import model_factory
-from bdpy.feature import normalize_feature
 from bdpy.pipeline.config import init_hydra_cfg
 from bdpy.recon.utils import normalize_image, clip_extreme
 import hdf5storage
@@ -157,39 +156,41 @@ def recon_fg_image(
                 # Normalization
                 if feature_scaling is None:
                     pass
-                elif feature_scaling == "feature_std":
-                    gen_input_feat = normalize_feature(
-                        gen_input_feat[0],
-                        channel_wise_mean=False, channel_wise_std=False,
-                        channel_axis=channel_axis,
-                        shift="self", scale=np.nanmean(feat_std0[generator_cfg.input_layer]),
-                        std_ddof=std_ddof
-                    )[np.newaxis]
-                elif feature_scaling == "feature_std_train_mean_center":
-                    gen_input_feat = gen_input_feat - feat_mean0_train
-                    gen_input_feat = normalize_feature(
-                        gen_input_feat[0],
-                        channel_wise_mean=False, channel_wise_std=False,
-                        channel_axis=channel_axis,
-                        shift="self", scale=np.nanmean(feat_std0[generator_cfg.input_layer]),
-                        std_ddof=std_ddof
-                    )[np.newaxis]
-                    gen_input_feat = gen_input_feat + feat_mean0_train
                 else:
-                    raise ValueError(f"Unsupported feature scaling: {feature_scaling}")
+                    a_feat = gen_input_feat[0]
+
+                    if a_feat.ndim == 1:
+                        axes_along = None
+                    else:
+                        axes = list(range(a_feat.ndim))
+                        axes.remove(channel_axis)
+                        axes_along = tuple(axes)
+
+                    if feature_scaling == "feature_std":
+                        feat_std = np.nanmean(np.nanstd(a_feat, axis=axes_along, ddof=std_ddof, keepdims=True), keepdims=True)
+                        feat_mean = np.nanmean(a_feat, keepdims=True)
+                        a_feat = ((a_feat - feat_mean) / feat_std) * np.nanmean(feat_std0[generator_cfg.input_layer]) + feat_mean
+                    elif feature_scaling == "feature_std_train_mean_center":
+                        a_feat = a_feat - feat_mean0_train[0]
+                        feat_std = np.nanmean(np.nanstd(a_feat, axis=axes_along, ddof=std_ddof, keepdims=True), keepdims=True)
+                        a_feat = (a_feat / feat_std) * np.nanmean(feat_std0[generator_cfg.input_layer])
+                        a_feat = a_feat + feat_mean0_train[0]
+                    else:
+                        raise ValueError(f"Unsupported feature scaling: {feature_scaling}")
+
+                    gen_input_feat = a_feat[np.newaxis]
 
                 # Normalization with ReLU features
                 if relu_normalization:
                     gen_input_feat = np.maximum(gen_input_feat, 0)
-                    gen_input_feat = gen_input_feat - feat_mean0_train
-                    gen_input_feat = normalize_feature(
-                        gen_input_feat[0],
-                        channel_wise_mean=True, channel_wise_std=True,
-                        channel_axis=channel_axis,
-                        shift="self", scale=feat_std0[relu_normalization],
-                        std_ddof=std_ddof
-                    )
-                    gen_input_feat = gen_input_feat + feat_mean0_train
+                    a_feat = gen_input_feat[0] - feat_mean0_train[0]
+                    axes = list(range(a_feat.ndim))
+                    axes.remove(channel_axis)
+                    axes_along = tuple(axes) if axes else None
+                    feat_std = np.nanstd(a_feat, axis=axes_along, ddof=std_ddof, keepdims=True)
+                    feat_mean = np.nanmean(a_feat, axis=axes_along, keepdims=True)
+                    a_feat = ((a_feat - feat_mean) / feat_std) * feat_std0[relu_normalization] + feat_mean
+                    gen_input_feat = (a_feat + feat_mean0_train[0])[np.newaxis]
 
                 # Iterative normalization
                 if iterative_normalization:
@@ -258,7 +259,7 @@ if __name__ == "__main__":
         subjects=subjects,
         rois=rois,
         generator_cfg=cfg.generator,
-        feature_scaling=cfg.fg.get("feature_scaling", None),
+        feature_scaling=cfg.get("fg", {}).get("feature_scaling", None),
         output_dir=to_absolute_path(cfg.output.path),
         output_image_ext=cfg.output.ext,
         output_image_prefix=cfg.output.prefix,
