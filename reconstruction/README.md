@@ -2,34 +2,46 @@
 
 ## Setup
 
-### Setting up environment
-
-You can make Python environment to run the code with [Anaconda](https://anaconda.org/).
-
-```shellsession
-$ conda env create -n <env name> -f env.yaml
-$ conda activate <env name>
-```
-
 ### Downloading data
 
 Run the following in `data` directory.
 
 ``` shellsession
-$ python download.py recon_demo
+$ uv run download.py recon_demo
 ```
 
 ## Usage
 
-iCNN reconstruction:
+### iCNN reconstruction
 
 Run the following command.
 
 ``` shellsession
-$ python recon_icnn_image_gd.py config/recon_icnn_vgg19_relu7generator_gd_1000iter_decoded_ImageNet.yaml
+$ uv run recon_icnn_image_gd.py config/recon_icnn_vgg19_relu7generator_gd_1000iter_decoded_ImageNet.yaml
 ```
 
-This will output reconstructed images in `data/reconstruction/icnn/`.
+This will output reconstructed images in `./data/reconstruction/icnn/recon_icnn_image_gd_vgg19_relu7generator_scaling_feature_std_train_mean_center_1000iter/decodedImageNetTest_deeprecon_VGG19`.
+
+If you want to change the reconstruction parameters at run time, please use `--override` option.
+
+``` shellsession
+# Use Shen scaling
+
+$ uv run recon_icnn_image_gd.py config/recon_icnn_vgg19_relu7generator_gd_1000iter_decoded_ImageNet.yaml  --override icnn.feature_scaling=feature_std_shen_original
+
+# Use raw decoded features ('null' is convert to None in Python script.)
+
+$ uv run recon_icnn_image_gd.py config/recon_icnn_vgg19_relu7generator_gd_1000iter_decoded_ImageNet.yaml  --override icnn.feature_scaling=null
+```
+
+### Evaluation
+
+When evaluating the reconstructed images, use the `--analysis` option and specify the name of the reconstruction script. 
+
+``` shellsession
+$ uv run recon_eval_image.py config/recon_icnn_vgg19_relu7generator_gd_1000iter_decoded_ImageNet.yaml --analysis recon_icnn_image_gd
+```
+
 
 ## Issues
 

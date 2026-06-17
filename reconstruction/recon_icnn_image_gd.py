@@ -1,7 +1,7 @@
 """iCNN reconstruction; gradient descent, with image generator."""
 
 
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 from glob import glob
 from itertools import product
@@ -10,7 +10,6 @@ import os
 
 from bdpy.dataform import Features, DecodedFeatures
 from bdpy.dl.torch.models import layer_map, model_factory
-from bdpy.feature import normalize_feature
 from bdpy.pipeline.config import init_hydra_cfg
 from bdpy.recon.torch.icnn import reconstruct
 from bdpy.recon.utils import normalize_image, clip_extreme
@@ -224,30 +223,50 @@ def recon_icnn_image_gd(
             # ----------------------------------------
             if decoded:
                 for layer, ft in feat.items():
+
                     if feature_scaling is None:
                         pass
-                    elif feature_scaling == "feature_std":
-                        ft = normalize_feature(
-                            ft[0],
-                            channel_wise_mean=False, channel_wise_std=False,
-                            channel_axis=channel_axis,
-                            shift='self', scale=np.mean(feat_std0[layer]),
-                            std_ddof=std_ddof
-                        )[np.newaxis]
-                    elif feature_scaling == "feature_std_train_mean_center":
-                        ft = ft - feat_mean0_train[layer]
-                        ft = normalize_feature(
-                            ft[0],
-                            channel_wise_mean=False, channel_wise_std=False,
-                            channel_axis=channel_axis,
-                            shift="self", scale=np.mean(feat_std0[layer]),
-                            std_ddof=std_ddof
-                        )[np.newaxis]
-                        ft = ft + feat_mean0_train[layer]
                     else:
-                        raise ValueError(f"Unsupported feature scaling: {feature_scaling}")
+                        # Adjust dimension
+                        a_feat = ft[0]
+
+                        # Get proper axis_along for fc/conv layers
+                        if a_feat.ndim == 1:
+                            axes_along = None
+                        else:
+                            axes = list(range(a_feat.ndim))
+                            axes.remove(channel_axis)
+                            axes_along = tuple(axes)
+
+                        # Perform feature scaling
+                        if feature_scaling == "feature_std_shen_original":
+                            feat_std = np.nanmean(np.nanstd(a_feat, axis=axes_along, ddof=std_ddof, keepdims=True), keepdims=True)
+                            a_feat = (a_feat / feat_std) * np.nanmean(feat_std0[layer])
+
+                        elif feature_scaling == "feature_std_layer_mean_center":
+                            feat_std = np.nanmean(np.nanstd(a_feat, axis=axes_along, ddof=std_ddof, keepdims=True), keepdims=True)
+                            feat_mean = np.nanmean(a_feat, keepdims=True)
+                            a_feat = ((a_feat - feat_mean) / feat_std) * np.nanmean(feat_std0[layer]) + feat_mean
+
+                        elif feature_scaling == "feature_std_train_mean_center":
+                            a_feat = a_feat - feat_mean0_train[layer][0]
+                            feat_std = np.nanmean(np.nanstd(a_feat, axis=axes_along, ddof=std_ddof, keepdims=True), keepdims=True)
+                            a_feat = (a_feat / feat_std) * np.nanmean(feat_std0[layer])
+                            a_feat = a_feat + feat_mean0_train[layer][0]
+
+                        else:
+                            raise ValueError(f"Unsupported feature scaling: {feature_scaling}")
+
+                        # Adjust dimension
+                        ft = a_feat[np.newaxis]
 
                     feat.update({layer: ft})
+                    
+            if decoded:
+                # Replace nan values with training mean
+                for layer, ft in feat.items():
+                    nan_mask = np.isnan(feat[layer])
+                    feat[layer][nan_mask] = feat_mean0_train[layer][nan_mask]
 
             # Norm of the DNN features for each layer
             feat_norm = np.array(
