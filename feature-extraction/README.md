@@ -1,6 +1,6 @@
 # DNN feature extraction from images
 
-Extraction of DNN features from stimulus images. The features are used as true features in [feature-decoding](../feature-decoding) and [reconstruction](../reconstruction).
+Extraction of DNN features from images. The features are used as true features in [feature-decoding](../feature-decoding) and [reconstruction](../reconstruction).
 
 ## Setup
 
@@ -13,11 +13,11 @@ $ cd data
 $ uv run download.py feature_extraction
 ```
 
-This puts `VGG_ILSVRC_19_layers.pt` and `ilsvrc_2012_mean.npy`, among other files, in `data/models/VGG_ILSVRC_19_layers`. The same archive is part of the `recon_demo` target used by the reconstruction analysis, so this step can be skipped if you have already run that; do not run this after `recon_demo` (or vice versa), since `download.py` re-extracts the archive unconditionally and the extracted files are read-only.
+This puts `VGG_ILSVRC_19_layers.pt` and `ilsvrc_2012_mean.npy`, among other files, in `data/models/VGG_ILSVRC_19_layers`. The same archive is part of the `recon_demo` target used by the reconstruction analysis, so this step can be skipped if you have already run that. Running this after `recon_demo` (or vice versa) returns a permission error, since `download.py` re-extracts the archive unconditionally and the extracted files are read-only.
 
-### Preparing stimulus images
+### Preparing the images
 
-The stimulus images are not distributed with this repository. Place them by hand in the directory given by `images.path` in the config file.
+The images are not distributed with this repository. Place them by hand in the directory given by `images.path` in the config file.
 
 ``` shellsession
 $ cd feature-extraction
